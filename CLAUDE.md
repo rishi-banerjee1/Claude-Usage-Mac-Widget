@@ -27,7 +27,7 @@ After editing `ClaudeUsageApp.swift`, always rebuild and relaunch — there is n
 
 ## Architecture
 
-Everything lives in `ClaudeUsageApp.swift` (~1610 lines). Key sections in order:
+Everything lives in `ClaudeUsageApp.swift` (~1634 lines). Key sections in order:
 
 1. **MetricType** — Enum defining available metrics (5-hour, 7-day, Sonnet) with display names and short labels
 2. **LoginItemManager** — `SMAppService`-based Launch at Login (macOS 13+ native API, no special permissions required)
@@ -38,7 +38,7 @@ Everything lives in `ClaudeUsageApp.swift` (~1610 lines). Key sections in order:
 7. **FloatingWidgetPanel** — `NSPanel` subclass: borderless, floating, non-activating, all Spaces, draggable
 8. **WidgetState** — Enum: `.ok`, `.needsSetup`, `.sessionExpired`, `.loading`
 9. **WidgetView** — SwiftUI view with four states + compact/full mode, circular progress ring, pace tracking, status messages, other-limits display, blue update dot, context menu (Compact/Full Size, Settings/Refresh/Quit)
-10. **WidgetPanelController** — Manages panel lifecycle, saves/restores position via UserDefaults, compact toggle with animated panel resize
+10. **WidgetPanelController** — Manages panel lifecycle, saves/restores position via UserDefaults, compact toggle with animated panel resize. Stores `moveObserver` token and removes it in `deinit` to prevent observer accumulation.
 11. **AppDelegate** — The core: 30-second fetch timer, 24-hour update check timer, HTTP requests, retry logic with jitter, Cloudflare cooldown, status calculation
 12. **Data Models** — `UsageResponse` and `UsageLimit` (Codable, maps to Claude API JSON)
 13. **Main Entry** — `@main` struct bootstraps `NSApplication` as `.accessory` (no dock icon)
@@ -47,7 +47,7 @@ Everything lives in `ClaudeUsageApp.swift` (~1610 lines). Key sections in order:
 
 - **SwiftUI inside Cocoa**: All SwiftUI views are wrapped in `NSHostingView` for embedding in `NSPanel`/`NSWindow`
 - **Settings propagation**: Save button posts `Notification.Name.settingsChanged`, AppDelegate observes it to re-fetch and resets `isSessionExpired` flag
-- **Keychain storage**: Session key stored in macOS Keychain (`kSecAttrAccessibleWhenUnlocked`). One-time transparent migration from UserDefaults on first launch after upgrade.
+- **Keychain storage**: Session key stored in macOS Keychain using `SecAccessCreate` with a `nil` trusted-apps list (open ACL) — any process can read without a password prompt, preventing repeated keychain dialogs across rebuilds. One-time transparent migration from UserDefaults on first launch after upgrade.
 - **Retry with jitter**: Failed API calls retry up to 3 times with exponential backoff + random jitter (`baseDelay * (0.5 + random(0...1.0))`) to avoid thundering herd
 - **Cloudflare vs session expiry**: HTTP 401/403 responses are inspected — Cloudflare challenge pages (HTML with "Just a moment") trigger retry with backoff; real auth errors (JSON) trigger `.sessionExpired` widget state
 - **Cloudflare cooldown**: After 3+ consecutive Cloudflare failures (all retries exhausted), polling pauses for 5 minutes. Counters reset on successful fetch or settings change.
@@ -77,7 +77,7 @@ Returns JSON with optional fields: `five_hour`, `seven_day`, `seven_day_sonnet`,
 - **Setup**: `./setup.sh` — interactive CLI that guides session key paste, auto-fetches org ID via API, validates, and saves
 - **Session key**: User pastes from browser cookies. Expires periodically — app detects via 401/403, widget shows "Session Expired". Settings uses `SecureField` (masked input).
 - **Org ID**: Auto-fetched by `setup.sh` via `GET /api/organizations`. Never expires.
-- **Storage**: Session key in macOS Keychain (service: `com.claude.usage`, account: `sessionKey`). Org ID and other settings in `UserDefaults`. Falls back to env vars `CLAUDE_SESSION_KEY` and `CLAUDE_ORGANIZATION_ID`.
+- **Storage**: Session key in macOS Keychain (service: `com.claude.usage`, account: `sessionKey`, open ACL via `SecAccessCreate`). Org ID and other settings in `UserDefaults`. Falls back to env vars `CLAUDE_SESSION_KEY` and `CLAUDE_ORGANIZATION_ID`.
 - **Migration**: On first launch after upgrade, session key is transparently migrated from UserDefaults to Keychain and deleted from UserDefaults.
 - **Security**: `setup.sh` never reads browser files or cookies directly. Input is masked (`read -s`). No credentials in logs or temp files.
 
@@ -86,8 +86,8 @@ Returns JSON with optional fields: `five_hour`, `seven_day`, `seven_day_sonnet`,
 | File | Purpose |
 |------|---------|
 | `ClaudeUsageApp.swift` | Entire app source (~1610 lines) — edit this for all changes |
-| `Info.plist` | Bundle config: `LSUIElement=true`, min macOS 13.0 |
-| `build.sh` | Build script (invokes `swiftc` + `generate-icon.sh`) |
+| `Info.plist` | Bundle config: `LSUIElement=true`, min macOS 13.0. Version is a placeholder (`0.0`) — overwritten at build time from `VERSION` file via `PlistBuddy` |
+| `build.sh` | Build script: generates icon, copies plist, injects version from `VERSION` via `PlistBuddy`, compiles with `swiftc`, ad-hoc signs with `codesign` |
 | `run.sh` | Kill existing + rebuild if needed + launch |
 | `setup.sh` | Interactive credential setup — guides paste, auto-fetches org ID, validates, detects Cloudflare |
 | `generate-icon.sh` | Programmatically draws app icon via inline Swift |

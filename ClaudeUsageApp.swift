@@ -257,13 +257,21 @@ class KeychainHelper {
     func save(key: String, value: String) -> Bool {
         guard let data = value.data(using: .utf8) else { return false }
         delete(key: key)
-        let query: [String: Any] = [
+        // Create an open ACL so any process (including after rebuilds) can read without prompting.
+        // kSecAttrAccessible conflicts with kSecAttrAccess — use one or the other, not both.
+        var access: SecAccess?
+        SecAccessCreate("Claude Usage" as CFString, nil, &access)
+        var query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
             kSecAttrAccount as String: key,
             kSecValueData as String: data,
-            kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlocked,
         ]
+        if let access = access {
+            query[kSecAttrAccess as String] = access
+        } else {
+            query[kSecAttrAccessible as String] = kSecAttrAccessibleWhenUnlocked
+        }
         return SecItemAdd(query as CFDictionary, nil) == errSecSuccess
     }
 
@@ -924,6 +932,7 @@ struct WidgetView: View {
 class WidgetPanelController {
     private var panel: FloatingWidgetPanel?
     private var hostingView: NSHostingView<WidgetView>?
+    private var moveObserver: NSObjectProtocol?
 
     private let posXKey = "widgetPositionX"
     private let posYKey = "widgetPositionY"
@@ -1033,7 +1042,8 @@ class WidgetPanelController {
         hostingView = hosting
         panel?.contentView = hosting
 
-        NotificationCenter.default.addObserver(
+        if let existing = moveObserver { NotificationCenter.default.removeObserver(existing) }
+        moveObserver = NotificationCenter.default.addObserver(
             forName: NSWindow.didMoveNotification,
             object: panel,
             queue: .main
@@ -1042,6 +1052,10 @@ class WidgetPanelController {
             UserDefaults.standard.set(frame.origin.x, forKey: self.posXKey)
             UserDefaults.standard.set(frame.origin.y, forKey: self.posYKey)
         }
+    }
+
+    deinit {
+        if let observer = moveObserver { NotificationCenter.default.removeObserver(observer) }
     }
 }
 
@@ -1062,6 +1076,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     let maxRetries = 3
     let maxLogEntries = 50
     var updateCheckTimer: Timer?
+    private var lastManualFetchTime: Date?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         addLog("App launched")
@@ -1230,11 +1245,17 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
 
-        // Write to file
+        // Write to file (rotate at 1 MB to prevent unbounded growth)
         let path = AppDelegate.logFile
         if let data = line.data(using: .utf8) {
             if FileManager.default.fileExists(atPath: path) {
-                if let handle = FileHandle(forWritingAtPath: path) {
+                let attrs = try? FileManager.default.attributesOfItem(atPath: path)
+                if let size = attrs?[.size] as? Int, size > 1_000_000 {
+                    let rotated = path + ".1"
+                    try? FileManager.default.removeItem(atPath: rotated)
+                    try? FileManager.default.moveItem(atPath: path, toPath: rotated)
+                    FileManager.default.createFile(atPath: path, contents: data, attributes: nil)
+                } else if let handle = FileHandle(forWritingAtPath: path) {
                     handle.seekToEndOfFile()
                     handle.write(data)
                     handle.closeFile()
@@ -1246,6 +1267,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func fetchUsageData() {
+        // Throttle manual refreshes to prevent hammering the API
+        if let last = lastManualFetchTime, Date().timeIntervalSince(last) < 5 { return }
+        lastManualFetchTime = Date()
         fetchUsageData(retryCount: 0)
     }
 
@@ -1257,7 +1281,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         // Skip polling if in Cloudflare cooldown
         if retryCount == 0, let cooldownUntil = cloudflareCooldownUntil {
-            if Date() < cooldownUntil {
+            if Date() < cooldownUntil && cooldownUntil.timeIntervalSinceNow < 86400 {
                 let remaining = Int(cooldownUntil.timeIntervalSinceNow)
                 addLog("Cloudflare cooldown active — \(remaining)s remaining, skipping fetch")
                 return

@@ -28,6 +28,16 @@ fi
 # Copy Info.plist
 cp Info.plist "${APP_BUNDLE}/Contents/"
 
+# Inject version from VERSION file — single source of truth, never hardcode in Info.plist
+APP_VERSION=$(cat VERSION 2>/dev/null | tr -d '[:space:]')
+if [ -n "$APP_VERSION" ]; then
+    /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString ${APP_VERSION}" "${APP_BUNDLE}/Contents/Info.plist"
+    /usr/libexec/PlistBuddy -c "Set :CFBundleVersion ${APP_VERSION}" "${APP_BUNDLE}/Contents/Info.plist"
+    echo "Version: ${APP_VERSION}"
+else
+    echo "Warning: VERSION file missing — Info.plist version unchanged"
+fi
+
 # Compile the Swift app
 swiftc ClaudeUsageApp.swift \
     -o "${APP_BUNDLE}/Contents/MacOS/${APP_NAME}" \
@@ -37,6 +47,8 @@ swiftc ClaudeUsageApp.swift \
     -parse-as-library
 
 if [ $? -eq 0 ]; then
+    # Ad-hoc sign so the binary has a stable identity across sessions (prevents keychain re-prompts)
+    codesign --force --sign - "${APP_BUNDLE}" 2>/dev/null && echo "App signed (ad-hoc)." || echo "Warning: codesign failed, continuing anyway."
     echo "Build successful! App bundle created at ${APP_BUNDLE}"
     echo ""
     echo "To run the app:"

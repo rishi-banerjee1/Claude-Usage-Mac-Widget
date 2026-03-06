@@ -90,14 +90,14 @@ Three ways to get the widget — pick the one that fits:
 ### Option 1: One-Command Install (Recommended)
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/rishiatlan/Claude-Usage-Mac-Widget/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/rishi-banerjee1/Claude-Usage-Mac-Widget/main/install.sh | bash
 ```
 
 Downloads the pre-built app, installs to `/Applications`, removes Gatekeeper quarantine, and launches it. No build tools needed.
 
 ### Option 2: Download from GitHub Releases
 
-1. Go to [**Releases**](https://github.com/rishiatlan/Claude-Usage-Mac-Widget/releases/latest)
+1. Go to [**Releases**](https://github.com/rishi-banerjee1/Claude-Usage-Mac-Widget/releases/latest)
 2. Download `ClaudeUsage.app.zip`
 3. Unzip and move `ClaudeUsage.app` to `/Applications`
 4. Double-click to launch
@@ -109,7 +109,7 @@ Downloads the pre-built app, installs to `/Applications`, removes Gatekeeper qua
 Requires macOS 13+ and Xcode Command Line Tools (`xcode-select --install`).
 
 ```bash
-git clone https://github.com/rishiatlan/Claude-Usage-Mac-Widget.git
+git clone https://github.com/rishi-banerjee1/Claude-Usage-Mac-Widget.git
 cd Claude-Usage-Mac-Widget
 chmod +x build.sh run.sh setup.sh generate-icon.sh
 ./build.sh
@@ -181,7 +181,7 @@ That's it. The widget appears on your desktop with live data.
 |-----------|--------|
 | **No browser access** | `setup.sh` never reads cookies, Keychain, or browser data — you paste the key yourself |
 | **Masked input** | Session key entry is hidden (`read -s`) and never echoed or logged |
-| **Keychain storage** | Session key stored in macOS Keychain (encrypted, `kSecAttrAccessibleWhenUnlocked`) — not in plain text |
+| **Keychain storage** | Session key stored in macOS Keychain with open ACL (`SecAccessCreate`) — no repeated password prompts across rebuilds or session key updates |
 | **No telemetry** | Zero analytics, zero tracking. Only talks to `claude.ai/api` |
 | **Cloudflare-aware** | Detects Cloudflare challenge pages and handles them gracefully — won't falsely report session expiry |
 | **Smart polling** | Pauses API calls when session expires — resumes when you save fresh credentials |
