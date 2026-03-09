@@ -7,12 +7,13 @@ set -euo pipefail
 
 APP_NAME="ClaudeUsage"
 OUTPUT_DIR="assets"
-MOV_FILE="/tmp/claude-widget-demo.mov"
+FRAME_DIR="/tmp/claude-widget-frames"
 GIF_FILE="${OUTPUT_DIR}/demo.gif"
 PALETTE_FILE="/tmp/claude-widget-palette.png"
 
-RECORD_SECONDS=12
-PADDING=40
+FRAME_COUNT=24
+FPS=2
+PADDING=15
 
 # --- Dependency check ---
 if ! command -v ffmpeg &>/dev/null; then
@@ -36,12 +37,19 @@ if ! pgrep -x "$APP_NAME" >/dev/null; then
     sleep 3
 fi
 
-# --- Get screen height for coordinate conversion ---
-SCREEN_H=$(system_profiler SPDisplaysDataType 2>/dev/null | grep -m1 Resolution | awk '{print $4}')
+# --- Get screen height in POINTS (not pixels) for coordinate conversion ---
+# screencapture uses points, not pixels. On Retina displays, pixel height ≠ point height.
+# NSScreen.main.frame.size.height gives the correct point-based value.
+SCREEN_H=$(osascript -e 'tell application "Finder" to get bounds of window of desktop' 2>/dev/null | awk -F', ' '{print $4}')
+if [ -z "$SCREEN_H" ] || [ "$SCREEN_H" = "0" ]; then
+    # Fallback: use python to query AppKit
+    SCREEN_H=$(python3 -c "from AppKit import NSScreen; print(int(NSScreen.mainScreen().frame().size.height))" 2>/dev/null)
+fi
 if [ -z "$SCREEN_H" ]; then
-    echo "Error: Could not detect screen resolution"
+    echo "Error: Could not detect screen resolution in points"
     exit 1
 fi
+echo "Screen height: ${SCREEN_H} points"
 
 # --- Get widget window position from UserDefaults ---
 POS_X=$(defaults read com.claude.usage widgetPositionX 2>/dev/null | cut -d. -f1 || echo "")
@@ -83,32 +91,39 @@ echo "  1. Watch the widget update (auto-refreshes every 30s)"
 echo "  2. Double-click to toggle compact mode"
 echo "  3. Right-click to show context menu"
 echo ""
-echo "Recording starts in 3 seconds..."
+echo "Capturing starts in 3 seconds..."
 sleep 3
 
-# --- Record screen region ---
-screencapture -v -V "$RECORD_SECONDS" -R "${CAPTURE_X},${CAPTURE_Y},${CAPTURE_W},${CAPTURE_H}" "$MOV_FILE"
+# --- Capture frames via screencapture (no Screen Recording permission needed) ---
+rm -rf "$FRAME_DIR" && mkdir -p "$FRAME_DIR"
+INTERVAL=$(echo "scale=2; 1 / $FPS" | bc)
 
-if [ ! -f "$MOV_FILE" ]; then
-    echo "Error: Recording failed — no output file"
+echo "Capturing ${FRAME_COUNT} frames at ${FPS}fps..."
+for i in $(seq -w 1 "$FRAME_COUNT"); do
+    screencapture -R "${CAPTURE_X},${CAPTURE_Y},${CAPTURE_W},${CAPTURE_H}" "${FRAME_DIR}/frame_${i}.png"
+    sleep "$INTERVAL"
+done
+
+CAPTURED=$(ls "$FRAME_DIR"/*.png 2>/dev/null | wc -l | tr -d ' ')
+if [ "$CAPTURED" -eq 0 ]; then
+    echo "Error: No frames captured"
     exit 1
 fi
-
-echo "Recording complete. Converting to GIF..."
+echo "Captured ${CAPTURED} frames. Converting to GIF..."
 
 # --- Two-pass ffmpeg: palette generation + GIF creation ---
-# Pass 1: Generate optimal 256-color palette from video frames
-ffmpeg -y -i "$MOV_FILE" \
-    -vf "fps=10,scale=${CAPTURE_W}:-1:flags=lanczos,palettegen=stats_mode=diff" \
+# Pass 1: Generate optimal 256-color palette
+ffmpeg -y -framerate "$FPS" -i "${FRAME_DIR}/frame_%02d.png" \
+    -vf "scale=220:-1:flags=lanczos,palettegen=stats_mode=diff" \
     "$PALETTE_FILE" 2>/dev/null
 
 # Pass 2: Apply palette for high-quality GIF
-ffmpeg -y -i "$MOV_FILE" -i "$PALETTE_FILE" \
-    -lavfi "fps=10,scale=${CAPTURE_W}:-1:flags=lanczos [x]; [x][1:v] paletteuse=dither=bayer:bayer_scale=5:diff_mode=rectangle" \
+ffmpeg -y -framerate "$FPS" -i "${FRAME_DIR}/frame_%02d.png" -i "$PALETTE_FILE" \
+    -lavfi "scale=220:-1:flags=lanczos [x]; [x][1:v] paletteuse=dither=bayer:bayer_scale=3" \
     "$GIF_FILE" 2>/dev/null
 
 # --- Cleanup ---
-rm -f "$MOV_FILE" "$PALETTE_FILE"
+rm -rf "$FRAME_DIR" "$PALETTE_FILE"
 
 # --- Report ---
 GIF_SIZE=$(ls -lh "$GIF_FILE" | awk '{print $5}')

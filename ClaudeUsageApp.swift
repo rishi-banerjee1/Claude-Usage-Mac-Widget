@@ -256,8 +256,23 @@ class KeychainHelper {
 
     func save(key: String, value: String) -> Bool {
         guard let data = value.data(using: .utf8) else { return false }
-        delete(key: key)
-        // Create an open ACL so any process (including after rebuilds) can read without prompting.
+
+        // Try to update the existing keychain item first — avoids deleting the ACL
+        // and re-prompting the user for keychain access.
+        let searchQuery: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: key,
+        ]
+        let updateAttrs: [String: Any] = [
+            kSecValueData as String: data,
+        ]
+        let updateStatus = SecItemUpdate(searchQuery as CFDictionary, updateAttrs as CFDictionary)
+        if updateStatus == errSecSuccess {
+            return true
+        }
+
+        // Item doesn't exist yet — create with open ACL so any process can read without prompting.
         // kSecAttrAccessible conflicts with kSecAttrAccess — use one or the other, not both.
         var access: SecAccess?
         SecAccessCreate("Claude Usage" as CFString, nil, &access)
