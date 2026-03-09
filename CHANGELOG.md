@@ -4,23 +4,21 @@ All notable changes to Claude Usage Mac Widget are documented here.
 
 ---
 
-## [1.4] — 2026-03-09
+## [1.5] — 2026-03-09
 
 ### Fixed
 - **Stale GitHub URLs** — self-updater, installer, and docs all pointed to old `rishiatlan` username. Now consistently `rishi-banerjee1/claude-usage-widget`.
 
 ### Added
 - **Homebrew cask** — `brew install --cask rishi-banerjee1/ai-tools/claude-usage-widget`
-- **`release.sh`** — automated release pipeline (build, package, SHA256, GitHub release, Homebrew update instructions)
-- **`record-demo.sh`** — scripted demo GIF recording via `screencapture` + `ffmpeg`
-- **GitHub Pages landing page** — `docs/index.html` with install CTA and feature overview
+- **GitHub Pages landing page** — renders README via Jekyll midnight theme
 - **README overhaul** — GIF hero, Homebrew as Option 1, SEO-optimized description, stars badge
+- **Keychain update-in-place** — settings saves use `SecItemUpdate` instead of delete+add, eliminating repeated keychain prompts
 
 ### Docs
 - Repo renamed from `Claude-Usage-Mac-Widget` to `claude-usage-widget`
 - All internal references updated to new repo name
 - GitHub description and topics updated for discoverability
-- `CLAUDE.md` File Roles table updated with new scripts
 
 ---
 

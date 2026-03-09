@@ -20,3 +20,8 @@ xcuserdata/
 
 # Environment
 .env
+
+# Local scripts (not distributed)
+record-demo.sh
+release.sh
+launch-posts.md
