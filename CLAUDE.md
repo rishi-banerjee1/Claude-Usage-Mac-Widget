@@ -101,7 +101,7 @@ Returns JSON with optional fields: `five_hour`, `seven_day`, `seven_day_sonnet`,
 | `release.sh` | Release automation — build, package, SHA256, GitHub release, Homebrew update instructions |
 | `record-demo.sh` | Records demo GIF via screencapture + ffmpeg |
 | `assets/` | Widget screenshots and demo GIF for README |
-| `docs/` | GitHub Pages landing page |
+| `_config.yml` | Jekyll config for GitHub Pages — renders README.md as the landing page |
 
 ## Logging
 

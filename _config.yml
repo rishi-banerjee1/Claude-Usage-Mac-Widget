@@ -1,0 +1,3 @@
+theme: jekyll-theme-midnight
+title: Claude Usage Widget
+description: Floating macOS widget that tracks Claude usage limits and rate limits in real time. Single-file Swift, no dependencies.
