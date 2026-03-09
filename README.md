@@ -99,6 +99,8 @@ Four ways to get the widget — pick the one that fits:
 brew install --cask rishi-banerjee1/ai-tools/claude-usage-widget
 ```
 
+> Don't have Homebrew? Install it first: [brew.sh](https://brew.sh)
+
 ### Option 2: One-Command Install
 
 ```bash
@@ -114,7 +116,7 @@ Downloads the pre-built app, installs to `/Applications`, removes Gatekeeper qua
 3. Unzip and move `ClaudeUsage.app` to `/Applications`
 4. Double-click to launch
 
-> **Gatekeeper warning?** macOS may say the app is from an unidentified developer. Fix: `xattr -dr com.apple.quarantine /Applications/ClaudeUsage.app` or right-click → Open → Open.
+> **macOS says "unidentified developer"?** Right-click the app → **Open** → click **Open** again. That's it — you only need to do this once.
 
 ### Option 4: Build from Source
 
@@ -129,16 +131,18 @@ chmod +x build.sh run.sh setup.sh generate-icon.sh
 open build/ClaudeUsage.app
 ```
 
-### Setup Credentials
+### Connect to Your Claude Account
 
-1. Right-click the widget → **Settings**
-2. Paste your **Session Key** (from browser cookies — see [How to Get Your Credentials](#how-to-get-your-credentials))
-3. Paste your **Organization ID** (from DevTools Network tab)
+The widget needs two pieces of info from your Claude account (one-time setup, takes ~2 minutes):
+
+1. **Launch the app** — a small widget appears on your desktop
+2. **Right-click the widget → Settings**
+3. Paste your **Session Key** and **Organization ID** (see [How to Get Your Credentials](#how-to-get-your-credentials) for step-by-step)
 4. Click **Save**
 
-> **Session key expired?** Right-click → Settings → paste a fresh key. Org ID never expires.
+That's it — the widget shows your live usage data.
 
-That's it. The widget appears on your desktop with live data.
+> **Session key expired?** The widget shows a red border when this happens. Just right-click → Settings → paste a fresh key. Your Org ID never expires.
 
 ---
 
@@ -165,25 +169,26 @@ That's it. The widget appears on your desktop with live data.
 
 ## How to Get Your Credentials
 
-`setup.sh` handles this automatically, but if you need to grab them manually:
+You need two things from your browser. Here's how to find them:
 
 ### Session Key
 
-1. Open **[claude.ai](https://claude.ai)** in Chrome or Safari (logged in)
-2. Open Developer Tools — **`Cmd + Option + I`**
-3. Go to **Application** tab (Chrome) or **Storage** tab (Safari)
-4. Expand **Cookies** → click **https://claude.ai**
-5. Find the row named **`sessionKey`** → copy the full value
+1. Open **[claude.ai](https://claude.ai)** in Chrome (make sure you're logged in)
+2. Press **`Cmd + Option + I`** to open Developer Tools
+3. Click the **Application** tab at the top
+4. In the left sidebar, expand **Cookies** → click **https://claude.ai**
+5. Find the row named **`sessionKey`** → double-click the **Value** column → copy it
 
-> **Note:** Session keys expire periodically (when your browser session refreshes). When this happens, the widget will show a **red "Session Expired"** border. Just re-run `./setup.sh` or paste a fresh key in Settings.
+> Session keys expire every few days. When the widget shows a red border, just paste a fresh key in Settings.
 
 ### Organization ID
 
-1. Still in DevTools, switch to the **Network** tab
+1. Still in Developer Tools, click the **Network** tab at the top
 2. Send any message in a Claude chat
-3. Find any request URL containing `/organizations/` — the UUID after it is your org ID
+3. Look at the request URLs that appear — find one containing `/organizations/`
+4. The long code after `/organizations/` is your Org ID (looks like `xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx`)
 
-> **Note:** Org IDs **never expire**. You only need to grab this once. `setup.sh` fetches it automatically from the API.
+> Your Org ID **never expires** — you only need to do this once.
 
 ---
 
@@ -191,11 +196,11 @@ That's it. The widget appears on your desktop with live data.
 
 | Principle | Detail |
 |-----------|--------|
-| **No browser access** | `setup.sh` never reads cookies, Keychain, or browser data — you paste the key yourself |
-| **Masked input** | Session key entry is hidden (`read -s`) and never echoed or logged |
-| **Keychain storage** | Session key stored in macOS Keychain with open ACL (`SecAccessCreate`) — no repeated password prompts across rebuilds or session key updates |
-| **No telemetry** | Zero analytics, zero tracking. Only talks to `claude.ai/api` |
-| **Cloudflare-aware** | Detects Cloudflare challenge pages and handles them gracefully — won't falsely report session expiry |
+| **No browser access** | The app never reads your cookies or browser data — you paste the key yourself |
+| **Masked input** | Session key is hidden when you type it and never logged |
+| **Keychain storage** | Session key stored securely in macOS Keychain — no repeated password prompts |
+| **No telemetry** | Zero analytics, zero tracking. The app only talks to `claude.ai` |
+| **Cloudflare-aware** | Handles Cloudflare security checks gracefully — won't falsely report your session as expired |
 | **Smart polling** | Pauses API calls when session expires — resumes when you save fresh credentials |
 | **Open source** | Read every line of `setup.sh` and `ClaudeUsageApp.swift` |
 
@@ -336,14 +341,13 @@ User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) ClaudeUsageWidget/1.
 
 | Issue | Fix |
 |-------|-----|
-| **"Setup Needed"** | Run `./setup.sh` or right-click → Settings → enter credentials |
-| **"Session Expired"** (red border) | Re-run `./setup.sh` with a fresh session key. Org ID is remembered. |
-| **Widget not visible** | App runs as background process. Check Activity Monitor → relaunch with `open build/ClaudeUsage.app` |
+| **"Setup Needed"** | Right-click the widget → Settings → enter your credentials |
+| **"Session Expired"** (red border) | Right-click → Settings → paste a fresh session key. Your Org ID is remembered. |
+| **Widget not visible** | The app has no dock or menubar icon — just the floating widget. Try relaunching the app. |
 | **Widget too big** | Double-click to switch to compact mode (just the ring). Double-click again to restore. |
-| **Data not loading** | Likely authentication — re-run `./setup.sh` |
-| **Stuck at same %** | That's accurate — 5-hour recovers gradually, 7-day resets weekly. Try switching metrics. |
-| **`setup.sh` says "Cloudflare blocked"** | Normal. Enter org ID manually when prompted. Widget app is unaffected. |
-| **Gatekeeper blocks the app** | Run `xattr -dr com.apple.quarantine /Applications/ClaudeUsage.app` or right-click → Open → Open |
+| **Data not loading** | Usually an expired session key — right-click → Settings → paste a fresh one |
+| **Stuck at same %** | That's accurate — usage recovers gradually over the time window. Try switching metrics via right-click. |
+| **macOS blocks the app** | Right-click the app → **Open** → click **Open** again |
 | **Build fails (SwiftBridging)** | `sudo rm -rf /Library/Developer/CommandLineTools && xcode-select --install` |
 | **Widget gone after restart** | Launch at Login is enabled by default. If you disabled it, re-enable via right-click → Settings |
 
